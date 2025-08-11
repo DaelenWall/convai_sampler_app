@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+requests
+polars
+sentence-transformers
+python-dotenv
+# CPU-only torch (smaller + cheaper). Render will install this via requirements.txt:
+torch --index-url https://download.pytorch.org/whl/cpu

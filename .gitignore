@@ -1,0 +1,23 @@
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pytest_cache/
+*.egg-info/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+# Logs
+*.log
+
+# Data outputs (generated at runtime)
+data/*.csv
+data/*.json
+!data/.gitkeep
+
+# Models / large artifacts
+models/
