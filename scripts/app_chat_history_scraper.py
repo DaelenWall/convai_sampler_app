@@ -21,7 +21,7 @@ SESSIONS_URL = "https://api.convai.com/character/chatHistory/list"
 DETAILS_URL = "https://api.convai.com/character/chatHistory/details"
 
 # === STEP 1: Fetch sessions on or after start_date ===
-def fetch_recent_sessions(start_date=""):
+def fetch_recent_sessions(start_date="2025-08-13"):
     response = requests.post(SESSIONS_URL, headers=HEADERS, json={
         "charID": CHAR_ID,
         "limit": "-1"
@@ -32,14 +32,14 @@ def fetch_recent_sessions(start_date=""):
     cutoff = datetime.fromisoformat(start_date)
     filtered_sessions = []
 
-    print(f"🔍 Checking timestamps for {len(all_sessions)} sessions since {start_date}...\n")
+    print(f"🔍 Checking timestamps for all sessions since {start_date}...\n")
 
     for idx, sess in enumerate(all_sessions):
         sid = sess["sessionID"]
         try:
             details = fetch_session_details(sid)
             if not details:
-                print(f"[{idx+1}/{len(all_sessions)}] ⏭️ Skipping session {sid} (empty details)")
+                print(f"[{idx+1}/{len(filtered_sessions)}] ⏭️ Skipping session {sid} (empty details)")
                 continue
 
             first_msg_time = details[0].get("timestamp")
@@ -50,10 +50,10 @@ def fetch_recent_sessions(start_date=""):
             ts_obj = datetime.fromisoformat(first_msg_time.replace("Z", "+00:00"))
 
             if ts_obj >= cutoff:
-                print(f"[{idx+1}/{len(all_sessions)}] ✅ Included session {sid} ({ts_obj})")
+                print(f"[{idx+1}/{len(filtered_sessions) + 1}] ✅ Included session {sid} ({ts_obj})")
                 filtered_sessions.append(sess)
             else:
-                print(f"[{idx+1}/{len(all_sessions)}] 🛑 Hit first session before {start_date}, stopping at {ts_obj}")
+                print(f"[STOPPED] 🛑 Hit first session before {start_date}, stopping at {ts_obj}")
                 break  # EARLY EXIT
 
         except Exception as e:
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     from datetime import datetime
     import shutil
 
-    start_date = "2025-08-05"  # Change this to your desired start date
+    start_date = "2025-08-15"  # Change this to your desired start date
     print(f"🔄 Fetching sessions from {start_date} onward...")
     sessions = fetch_recent_sessions(start_date=start_date)
 

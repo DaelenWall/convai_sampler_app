@@ -8,6 +8,18 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 INPUT_CSV = os.path.join(BASE_DIR, "data", "app_selected_history.csv")
 NARRATIVE_JSON = os.path.join(BASE_DIR, "data", "narrative_map.json")
 OUTPUT_CSV = os.path.join(BASE_DIR, "data", "app_nlp_summary.csv")
+SECTION_EVENTS = os.path.join(BASE_DIR, "data", "section_events.jsonl")
+events_by_session = {}
+
+if os.path.exists(SECTION_EVENTS):
+    with open(SECTION_EVENTS, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                ev = json.loads(line)
+                events_by_session.setdefault(ev["session_id"], []).append(ev["section_id"])
+            except Exception:
+                pass
+
 
 # === Load data ===
 print(f"📅 Loading chat history from: {INPUT_CSV}")
@@ -124,40 +136,58 @@ print(f"🧾 Analyzing {len(session_ids)} unique sessions...")
 for session_id in session_ids:
     session_df = df.filter(pl.col("Session ID") == session_id)
 
-    # For now, we don’t have per-session state tracking
+    # Track active section per session (we advance this as we infer/receive hops)
     current_section_id = None
 
+    event_queue = list(events_by_session.get(session_id, []))
+    current_section_id = event_queue.pop(0) if event_queue else None
+
     for row in session_df.iter_rows(named=True):
-        user_input = row["User Input"]
-        char_response = row["Character Response"]
+        user_input = row.get("User Input", "")
+        char_response = row.get("Character Response", "")
 
         if not isinstance(user_input, str) or not isinstance(char_response, str):
             continue
 
+        # Infer the best matching decision/trigger from the *current* section
         match = semantic_match(user_input, narrative_map, current_section_id)
-        expected = match["expected_response"]
+        expected = match["expected_response"] or ""
+        from_section = match["from_section"]
+        to_section = match["to_section"]
 
-      #  if not expected.strip():
-     #       print(f"⏭️ Skipping (no expected response for '{user_input}')")
-     #       continue
+        print(f"🧭 Session {session_id} | '{user_input}' → '{match['matched_criteria']}' | "
+              f"{from_section} -> {to_section} (score={round(match['match_score'], 3)})")
 
-        print(f"🧭 Session {session_id} | '{user_input}' → '{match['matched_criteria']}'")
+        # Compute semantic deviation (Actual vs Expected)
+        if expected.strip():
+            response_embeds = model.encode([char_response, expected], convert_to_tensor=True)
+            similarity = util.pytorch_cos_sim(response_embeds[0], response_embeds[1]).item()
+            similarity = round(float(similarity), 3)
+        else:
+            similarity = None  # no expected line to compare
 
-        # Compute semantic deviation
-        response_embeds = model.encode([char_response, expected], convert_to_tensor=True)
-        similarity = util.pytorch_cos_sim(response_embeds[0], response_embeds[1]).item()
-
+        # ✅ Append rich row
         results.append({
             "Session ID": session_id,
             "User Input": user_input,
-            # "Matched Criteria": match["matched_criteria"],
-            # "From Section": match["from_section"],
-            # "To Section": match["to_section"],
-            # "Expected DK Response": expected,
+            "Matched Criteria": match["matched_criteria"] or "",
+            "From Section": from_section or "",
+            "To Section": to_section or "",
+            "Expected DK Response": expected,
             "Actual DK Response": char_response,
-            # "Deviation Score (cosine sim)": round(similarity, 3),
-            # "Input → Trigger Match Score": round(match["match_score"], 3)
+            "Deviation Score (cosine sim)": similarity if similarity is not None else "",
+            "Input → Trigger Match Score": round(match["match_score"], 3) if match["match_score"] != -1 else ""
         })
+
+        # 🔁 Advance the narrative pointer if we have a destination
+        # If you want UE to be the source of truth:
+        if event_queue:
+            current_section_id = event_queue.pop(0)
+        elif to_section:
+            current_section_id = to_section
+
+        if to_section:
+            current_section_id = to_section
 
 # === Save results ===
 summary = pl.DataFrame(results)
