@@ -6,7 +6,7 @@ Lets you:
 * Export a narrative map for a Convai character
 * Scrape recent chat history
 * View results in CSV format
-* *Eventually perform NLP analysis*
+* Perform NLP Analysis on recent chat history
 
 ---
 
